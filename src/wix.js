@@ -82,7 +82,9 @@ export async function createProduct(env, l, { origin }) {
     };
     if (media.length) product.media = { itemsInfo: { items: media.map(url => ({ url, altText: l.title })) } };
     const j = await wix(env, 'POST', '/stores/v3/products', { product });
-    return { productId: j.product.id, version: v };
+    const out = { productId: j.product.id, version: v };
+    out.pages = await placeInGroups(env, { ...l, wix: out }).catch(e => ['(not added to pages: ' + e.message.slice(0, 120) + ')']);
+    return out;
   }
   const j = await wix(env, 'POST', '/stores/v1/products', {
     product: {
@@ -95,11 +97,14 @@ export async function createProduct(env, l, { origin }) {
   });
   const id = j.product.id;
   if (media.length) await wix(env, 'POST', `/stores/v1/products/${id}/media`, { media: media.map(url => ({ url })) });
-  return { productId: id, version: v };
+  const out = { productId: id, version: v };
+  out.pages = await placeInGroups(env, { ...l, wix: out }).catch(e => ['(not added to pages: ' + e.message.slice(0, 120) + ')']);
+  return out;
 }
 
 export async function updateProduct(env, l, { origin }) {
   if (!l.wix?.productId) return;
+  l.wix.pages = await placeInGroups(env, l).catch(e => ['(not added to pages: ' + e.message.slice(0, 120) + ')']);
   const id = l.wix.productId;
   const wantUrl = `${origin}/want/${l.id}`;
   if (l.wix.version === 'V3_CATALOG') {
@@ -131,6 +136,49 @@ export async function deleteProduct(env, l) {
   await wix(env, 'DELETE', base + l.wix.productId);
 }
 
+
+// ---- Collections (V1) / Categories (V3): which store pages a product shows on.
+const STORES_APP = '215238eb-22a5-4c36-9e7b-e7c08025e04e';
+const TREE = { appNamespace: '@wix/stores' };
+
+export async function listGroups(env) {
+  const v = await catalogVersion(env);
+  if (v === 'V3_CATALOG') {
+    const j = await wix(env, 'POST', '/categories/v1/categories/query', { query: { cursorPaging: { limit: 100 } }, treeReference: TREE });
+    return (j.categories || []).map(c => ({ id: c.id, name: c.name }));
+  }
+  const j = await wix(env, 'POST', '/stores/v1/collections/query', { query: { paging: { limit: 100 } } });
+  return (j.collections || []).map(c => ({ id: c.id, name: c.name }));
+}
+
+// Pick store pages by name: category (Cardio/Strength/Recovery) + Remanufactured/Pre-owned when not new.
+function groupsFor(l, groups) {
+  const want = [];
+  const rx = { Cardio: /cardio/i, Strength: /strength/i, Recovery: /recover/i }[l.cat];
+  if (rx) want.push(rx);
+  if (l.cond !== 'New') want.push(/reman|pre.?owned|certified|refurb|used/i);
+  else want.push(/\bnew\b/i);
+  return groups.filter(g => g.name && want.some(r => r.test(g.name)) && !/^all products$/i.test(g.name));
+}
+
+export async function placeInGroups(env, l) {
+  if (!l.wix?.productId) return [];
+  const groups = await listGroups(env);
+  const target = groupsFor(l, groups);
+  const pid = l.wix.productId;
+  for (const g of target) {
+    if (l.wix.version === 'V3_CATALOG') {
+      await wix(env, 'POST', `/categories/v1/bulk/categories/${g.id}/add-items`, { items: [{ catalogItemId: pid, appId: STORES_APP }], treeReference: TREE });
+    } else {
+      await wix(env, 'POST', `/stores/v1/collections/${g.id}/productIds`, { productIds: [pid] });
+    }
+  }
+  return target.map(g => g.name);
+}
+
 export async function testConnection(env) {
-  return { catalogVersion: await catalogVersion(env) };
+  const catalog = await catalogVersion(env);
+  let groups = [];
+  try { groups = (await listGroups(env)).map(g => g.name); } catch (e) { groups = ['(could not list: ' + e.message.slice(0, 120) + ')']; }
+  return { catalogVersion: catalog, storePages: groups };
 }

@@ -135,7 +135,7 @@ $('#postBtn').addEventListener('click', async () => {
     openSheet(`<div style="display:flex;flex-direction:column;gap:14px;align-items:center;text-align:center;padding:6px 0 4px">
       ${l.wixError ? '<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#F5B82E" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/></svg>' : '<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#7FD8A0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>'}
       <h1 style="font-size:26px">${l.wixError ? 'SAVED — WEBSITE DIDN’T UPDATE' : 'IT’S LIVE'}</h1>
-      <p class="muted" style="margin:0;font-size:15px;line-height:1.5">${l.wixError ? 'It’s saved in the app. The website said: ' + esc(l.wixError) : `“${esc(title)}” is up for ${money(price)}.`}</p>
+      <p class="muted" style="margin:0;font-size:15px;line-height:1.5">${l.wixError ? 'It’s saved in the app. The website said: ' + esc(l.wixError) : `“${esc(title)}” is up for ${money(price)}.` + (l.wix && l.wix.pages && l.wix.pages.length ? ` Showing on: ${esc(l.wix.pages.join(', '))}.` : '')}</p>
       <a class="cta" href="/want/${l.id}" target="_blank" rel="noopener">SEE IT</a>
       <button class="cta ghost" data-close>POST ANOTHER</button></div>`);
   } catch (err) { toast('Didn’t post', err.message); }
@@ -314,11 +314,12 @@ async function renderMore(check) {
   const s = await loadStatus(check);
   if (!s) { $('#moreWrap').innerHTML = '<div class="empty err">Couldn’t reach the server.</div>'; return; }
   const w = s.wix, q = s.qb;
+  const pagesLine = w.storePages ? `<div class="muted" style="line-height:1.5">Store pages found: ${esc(w.storePages.join(', ') || 'none')}</div>` : '';
   const wixLine = w.mode !== 'wix' ? ['w', 'Test mode — listings show on the app’s own shop page, not Wix yet'] : w.error ? ['w', 'Wix connection problem: ' + w.error] : w.ready ? ['g', 'Connected to your Wix store' + (w.catalogVersion ? ' (' + w.catalogVersion.replace('_CATALOG', '') + ')' : '')] : ['w', 'Wix key not set up yet'];
   $('#moreWrap').innerHTML = `
     <div class="card" style="display:flex;flex-direction:column;gap:10px">
       <div style="font-family:var(--head);letter-spacing:.06em">WEBSITE</div>
-      <div><span class="dot ${wixLine[0]}"></span>${esc(wixLine[1])}</div>
+      <div><span class="dot ${wixLine[0]}"></span>${esc(wixLine[1])}</div>${pagesLine}
       <a class="cta ghost" style="height:44px;font-size:15px" href="${esc(s.shopUrl)}" target="_blank" rel="noopener">OPEN SHOP PAGE</a>
     </div>
     <div class="card" style="display:flex;flex-direction:column;gap:10px">
