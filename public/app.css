@@ -88,3 +88,7 @@ header.top{padding-top:calc(18px + var(--safe-t))}
 .dot{width:10px;height:10px;border-radius:5px;display:inline-block;margin-right:8px;background:#555}
 .dot.g{background:#7FD8A0}.dot.w{background:var(--y)}
 a.cta{text-decoration:none}
+
+.sheet-top{position:relative;height:34px;margin-bottom:6px}
+.sheet-top .grab{position:absolute;left:50%;top:0;transform:translateX(-50%);margin:0}
+.sheet-x{position:absolute;right:-6px;top:-4px;width:44px;height:44px;border-radius:22px;border:1px solid var(--line);background:var(--s1);color:var(--tx);display:flex;align-items:center;justify-content:center}

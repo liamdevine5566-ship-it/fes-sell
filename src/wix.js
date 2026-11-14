@@ -17,7 +17,10 @@ async function wix(env, method, path, body) {
   const text = await r.text();
   let json; try { json = text ? JSON.parse(text) : {}; } catch { json = { raw: text }; }
   if (!r.ok) {
-    const err = new Error(`Wix ${method} ${path} → ${r.status}: ${text.slice(0, 300)}`);
+    const what = path.includes('site-media') ? 'copying photos' : path.includes('collections') || path.includes('categories') ? 'adding to store pages' : path.includes('provision') ? 'connecting' : 'updating the product';
+    const hint = r.status === 401 ? 'the Wix API key is wrong or was deleted' : r.status === 403 ? 'the Wix API key is missing a permission' + (path.includes('site-media') ? ' (turn on Wix Media / Media Manager)' : ' (turn on Wix Stores)') : r.status === 404 ? 'not found on Wix' : 'Wix error ' + r.status;
+    let detail = ''; try { detail = JSON.parse(text).message || ''; } catch {}
+    const err = new Error(`Wix problem ${what}: ${hint}${detail ? ' — ' + detail.slice(0, 120) : ''}`);
     err.status = r.status;
     throw err;
   }
@@ -69,9 +72,12 @@ export async function createProduct(env, l, { origin }) {
   const v = await catalogVersion(env);
   const wantUrl = `${origin}/want/${l.id}`;
   const media = [];
-  for (const [i, key] of (l.photos || []).slice(0, v === 'V3_CATALOG' ? 3 : 10).entries()) {
-    media.push(await importPhoto(env, `${origin}/photos/${key}`, `${l.id}-${i + 1}.jpg`));
-  }
+  let photoError = null;
+  try {
+    for (const [i, key] of (l.photos || []).slice(0, v === 'V3_CATALOG' ? 3 : 10).entries()) {
+      media.push(await importPhoto(env, `${origin}/photos/${key}`, `${l.id}-${i + 1}.jpg`));
+    }
+  } catch (e) { photoError = e.message; media.length = 0; }
   if (v === 'V3_CATALOG') {
     const product = {
       name: l.title.slice(0, 80),
@@ -83,7 +89,7 @@ export async function createProduct(env, l, { origin }) {
     };
     if (media.length) product.media = { itemsInfo: { items: media.map(url => ({ url, altText: l.title })) } };
     const j = await wix(env, 'POST', '/stores/v3/products', { product });
-    const out = { productId: j.product.id, version: v, slug: j.product.slug };
+    const out = { productId: j.product.id, version: v, slug: j.product.slug, mediaDone: !photoError, photoError };
     out.pages = await placeInGroups(env, { ...l, wix: out }).catch(e => ['(not added to pages: ' + e.message.slice(0, 120) + ')']);
     return out;
   }
@@ -98,13 +104,29 @@ export async function createProduct(env, l, { origin }) {
   });
   const id = j.product.id;
   if (media.length) await wix(env, 'POST', `/stores/v1/products/${id}/media`, { media: media.map(url => ({ url })) });
-  const out = { productId: id, version: v, slug: j.product.slug };
+  const out = { productId: id, version: v, slug: j.product.slug, mediaDone: !photoError, photoError };
   out.pages = await placeInGroups(env, { ...l, wix: out }).catch(e => ['(not added to pages: ' + e.message.slice(0, 120) + ')']);
   return out;
 }
 
+async function retryPhotos(env, l, origin) {
+  if (l.wix.mediaDone !== false || !(l.photos || []).length) return;
+  const media = [];
+  for (const [i, key] of l.photos.slice(0, l.wix.version === 'V3_CATALOG' ? 3 : 10).entries()) {
+    media.push(await importPhoto(env, `${origin}/photos/${key}`, `${l.id}-${i + 1}.jpg`));
+  }
+  if (l.wix.version === 'V3_CATALOG') {
+    const cur = await wix(env, 'GET', `/stores/v3/products/${l.wix.productId}`);
+    await wix(env, 'PATCH', `/stores/v3/products/${l.wix.productId}`, { product: { id: l.wix.productId, revision: cur.product.revision, media: { itemsInfo: { items: media.map(url => ({ url, altText: l.title })) } } } });
+  } else {
+    await wix(env, 'POST', `/stores/v1/products/${l.wix.productId}/media`, { media: media.map(url => ({ url })) });
+  }
+  l.wix.mediaDone = true; l.wix.photoError = null;
+}
+
 export async function updateProduct(env, l, { origin }) {
   if (!l.wix?.productId) return;
+  try { await retryPhotos(env, l, origin); } catch (e) { l.wix.photoError = e.message; }
   l.wix.pages = await placeInGroups(env, l).catch(e => ['(not added to pages: ' + e.message.slice(0, 120) + ')']);
   const id = l.wix.productId;
   const wantUrl = `${origin}/want/${l.id}`;

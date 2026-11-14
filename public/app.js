@@ -29,8 +29,13 @@ const S = { listings: [], requests: [], status: null, filter: 'all', photos: [],
 
 // ---------- nav
 let current = 'login';
-function go(name) {
-  current = name; closeSheet();
+const backStack = [];
+function go(name, opts = {}) {
+  if (!opts.fromBack && current !== name && current !== 'login' && name !== 'login') {
+    backStack.push(current);
+    try { history.pushState({ screen: name }, ''); } catch {}
+  }
+  current = name; closeSheet(true);
   $$('.screen').forEach(s => s.classList.remove('on'));
   $('#s-' + name).classList.add('on');
   $('#tabs').classList.toggle('hidden', name === 'login');
@@ -41,7 +46,7 @@ function go(name) {
   if (name === 'req') loadRequests();
   if (name === 'more') renderMore(true);
 }
-document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); });
+document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); if (e.target.closest('[data-back]')) { if (backStack.length) history.back(); else go('req'); } });
 
 // ---------- login
 $('#loginForm').addEventListener('submit', async e => {
@@ -134,8 +139,8 @@ $('#postBtn').addEventListener('click', async () => {
     S.listings.unshift(l); clearSell();
     openSheet(`<div style="display:flex;flex-direction:column;gap:14px;align-items:center;text-align:center;padding:6px 0 4px">
       ${l.wixError ? '<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#F5B82E" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/></svg>' : '<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#7FD8A0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>'}
-      <h1 style="font-size:26px">${l.wixError ? 'SAVED — WEBSITE DIDN’T UPDATE' : 'IT’S LIVE'}</h1>
-      <p class="muted" style="margin:0;font-size:15px;line-height:1.5">${l.wixError ? 'It’s saved in the app. The website said: ' + esc(l.wixError) : `“${esc(title)}” is up for ${money(price)}.` + (l.wix && l.wix.pages && l.wix.pages.length ? ` Showing on: ${esc(l.wix.pages.join(', '))}.` : '')}</p>
+      <h1 style="font-size:26px">${l.wixError ? (l.wix && l.wix.productId ? 'LIVE — PHOTOS PENDING' : 'SAVED — WEBSITE DIDN’T UPDATE') : 'IT’S LIVE'}</h1>
+      <p class="muted" style="margin:0;font-size:15px;line-height:1.5">${l.wixError ? esc(l.wixError) : `“${esc(title)}” is up for ${money(price)}.` + (l.wix && l.wix.pages && l.wix.pages.length ? ` Showing on: ${esc(l.wix.pages.join(', '))}.` : '')}</p>
       <a class="cta" href="${siteLink(l)}" target="_blank" rel="noopener">SEE IT</a>
       <button class="cta ghost" data-close>POST ANOTHER</button></div>`);
   } catch (err) { toast('Didn’t post', err.message); }
@@ -176,7 +181,7 @@ function editSheet(id) {
   openSheet(`<div style="display:flex;flex-direction:column;gap:14px">
     <div class="row"><div class="list-thumb" style="width:64px;height:64px">${thumbOf(l)}</div>
       <div style="min-width:0"><div class="brand">EDIT LISTING</div><div style="font-weight:600;font-size:16px;margin-top:2px">${esc(l.title)}</div></div></div>
-    ${l.wixError ? `<div class="muted err" style="line-height:1.5">Website didn’t update: ${esc(l.wixError)}. Saving again will retry.</div>` : ''}
+    ${l.wixError ? `<div class="muted err" style="line-height:1.5">${esc(l.wixError)}</div>` : ''}
     <div><label class="lab" for="eTitle">Title</label><input class="field" id="eTitle" value="${esc(l.title)}" maxlength="80"></div>
     <div><label class="lab" for="ePrice">Price</label><input class="field" id="ePrice" inputmode="decimal" value="${l.price}"></div>
     <div><label class="lab" for="eDesc">Description</label><textarea class="field" id="eDesc">${esc(l.desc)}</textarea></div>
@@ -350,10 +355,25 @@ document.addEventListener('click', async e => {
 });
 
 // ---------- sheet & toast
-function openSheet(html) { $('#sheetBody').innerHTML = html; $('#scrim').classList.add('on'); $('#sheet').classList.add('on'); }
-function closeSheet() { $('#scrim').classList.remove('on'); $('#sheet').classList.remove('on'); }
-$('#scrim').addEventListener('click', closeSheet);
-$('.grab').addEventListener('click', closeSheet);
+let sheetOpen = false;
+function openSheet(html) {
+  $('#sheetBody').innerHTML = html; $('#scrim').classList.add('on'); $('#sheet').classList.add('on');
+  if (!sheetOpen) { sheetOpen = true; try { history.pushState({ sheet: true }, ''); } catch {} }
+}
+function closeSheet(silent) {
+  $('#scrim').classList.remove('on'); $('#sheet').classList.remove('on');
+  if (sheetOpen) { sheetOpen = false; if (!silent) { try { history.back(); } catch {} } }
+}
+// phone/browser Back: close a pop-up first, otherwise go to the previous screen
+window.addEventListener('popstate', () => {
+  if (sheetOpen) { sheetOpen = false; $('#scrim').classList.remove('on'); $('#sheet').classList.remove('on'); return; }
+  const prev = backStack.pop();
+  if (prev && current !== 'login') go(prev, { fromBack: true });
+});
+$('#sheetX').addEventListener('click', () => closeSheet());
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetOpen) closeSheet(); });
+$('#scrim').addEventListener('click', () => closeSheet());
+$('.grab').addEventListener('click', () => closeSheet());
 let tt;
 function toast(title, sub) {
   const t = $('#toast');

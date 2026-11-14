@@ -88,7 +88,7 @@
   <!-- INVOICE -->
   <section class="screen" id="s-inv">
     <header class="top" style="justify-content:flex-start">
-      <button class="icon-btn" data-go="req" aria-label="Back to requests"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <button class="icon-btn" data-back aria-label="Back to requests"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
       <div style="min-width:0"><div class="brand">BUYER REQUEST</div><h1 id="invTitle" style="font-size:24px">—</h1></div>
     </header>
     <div class="pad" id="invWrap" style="gap:14px"></div>
@@ -110,7 +110,7 @@
   </nav>
 
   <div class="scrim" id="scrim"></div>
-  <div class="sheet" id="sheet"><button class="grab" aria-label="Close"></button><div id="sheetBody"></div></div>
+  <div class="sheet" id="sheet"><div class="sheet-top"><button class="grab" aria-label="Close"></button><button class="sheet-x" id="sheetX" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div><div id="sheetBody"></div></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </div>
 <script src="/app.js"></script>

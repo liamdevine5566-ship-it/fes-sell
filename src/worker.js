@@ -50,7 +50,7 @@ async function syncToWix(env, l, origin, action) {
     if (action === 'create') l.wix = await wix.createProduct(env, l, { origin });
     else if (action === 'update') await wix.updateProduct(env, l, { origin });
     else if (action === 'delete') await wix.deleteProduct(env, l);
-    l.wixError = null;
+    l.wixError = l.wix?.photoError ? 'On the website, but the photos didn’t copy — ' + l.wix.photoError.replace(/^Wix problem copying photos: /, '') + '. Tap Save on this item to retry.' : null;
   } catch (e) {
     console.log(e.message);
     l.wixError = e.message.slice(0, 300);

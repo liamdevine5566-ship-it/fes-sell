@@ -37,6 +37,7 @@ export function wantPage(env, l) {
   const sold = l.status === 'sold', pend = l.status === 'pending';
   const imgs = [...(l.photos || []).map(k => '/photos/' + k), ...(l.photoUrls || [])].map(u => `<img src="${esc(u)}" alt="${esc(l.title)}">`).join('');
   return shell(env, l.title, `
+    <a href="javascript:history.length>1?history.back():location.assign('/shop')" style="display:inline-flex;align-items:center;gap:4px;color:#111;text-decoration:none;font-size:15px;padding:6px 0 12px">← Back</a>
     ${imgs ? `<div class="gallery">${imgs}</div>` : ''}
     <div class="tags" style="margin-top:14px"><span class="tag">${l.cond === 'New' ? 'NEW' : 'CERTIFIED PRE-OWNED'}</span><span class="tag o">${esc((l.cat || '').toUpperCase())}</span></div>
     <h1>${esc(l.title.toUpperCase())}</h1>
