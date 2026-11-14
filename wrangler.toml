@@ -1,0 +1,40 @@
+name = "fes-sell"
+main = "src/worker.js"
+compatibility_date = "2026-11-01"
+
+# The phone app (public/) is served by the same Worker.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*", "/want/*", "/photos/*", "/qb/*", "/shop"]
+
+# Listings, buyer requests, sessions and connection tokens.
+[[kv_namespaces]]
+binding = "DB"
+id = "REPLACE_WITH_KV_ID"
+
+# Listing photos.
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "fes-sell-photos"
+
+[vars]
+# "local" = listings live only in this app (use for testing).
+# "wix"   = every listing is also created/updated on Frank's Wix store.
+STORE_MODE = "local"
+WIX_SITE_ID = "5bb413e8-a139-4c76-ae34-c36b2e5f6fc1"
+BUSINESS_NAME = "Fitness Equipment Solutions"
+BUSINESS_TOWN = "Rothesay, NB"
+SALES_TAX_RATE = "0.15"
+# QuickBooks: "production" or "sandbox"
+QB_ENV = "production"
+# Name of the sales-tax code in Frank's QuickBooks (check under Taxes).
+QB_TAX_CODE_NAME = "HST NB"
+QB_ITEM_NAME = "Fitness Equipment"
+AI_MODEL = "claude-sonnet-5-5"
+
+# Secrets — set with `npx wrangler secret put NAME` (never in this file):
+#   APP_PIN              the PIN Frank types to open the app
+#   ANTHROPIC_API_KEY    for "Write it for me"
+#   WIX_API_KEY          from Frank's Wix account (API Keys)
+#   QB_CLIENT_ID / QB_CLIENT_SECRET   from developer.intuit.com app

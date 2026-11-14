@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FES Sell">
+<meta name="theme-color" content="#0E0E0E">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<link rel="icon" href="/icons/icon-192.png">
+<title>FES Sell</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- LOGIN -->
+  <section class="screen" id="s-login">
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:32px 28px;gap:18px">
+      <div class="brand">FITNESS EQUIPMENT SOLUTIONS</div>
+      <h1 style="font-size:40px">SELL</h1>
+      <p class="muted" style="font-size:15px;margin:0">Enter your PIN to open the app. You only do this once on this phone.</p>
+      <form id="loginForm" style="display:flex;flex-direction:column;gap:14px">
+        <label class="lab" for="pin" style="margin:0">PIN</label>
+        <input class="field" id="pin" inputmode="numeric" autocomplete="one-time-code" type="password" style="font-size:22px;letter-spacing:.3em">
+        <button class="cta" id="loginBtn">OPEN</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- SELL -->
+  <section class="screen" id="s-sell">
+    <header class="top">
+      <div><div class="brand">FITNESS EQUIPMENT SOLUTIONS</div><h1>NEW LISTING</h1></div>
+      <button class="icon-btn" id="clearSell" aria-label="Clear this listing"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </header>
+    <div class="pad">
+      <div class="photos" id="photos">
+        <label class="shoot" for="cam">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="4"/></svg>
+          <span id="shootLbl">TAKE PHOTOS</span>
+        </label>
+        <input id="cam" type="file" accept="image/*" multiple class="hidden">
+        <div id="thumbs" class="thumbs"></div>
+      </div>
+      <div><label class="lab" for="fTitle">Title</label><input class="field" id="fTitle" placeholder="e.g. Precor EFX 835 Elliptical" autocomplete="off" maxlength="80"></div>
+      <div><span class="lab">Condition</span>
+        <div class="seg" data-group="cond"><button class="chip" data-v="New">New</button><button class="chip on" data-v="Certified pre-owned">Certified pre-owned</button></div></div>
+      <div><span class="lab">Category</span>
+        <div class="chips" data-group="cat"><button class="chip on" data-v="Cardio">Cardio</button><button class="chip" data-v="Strength">Strength</button><button class="chip" data-v="Recovery">Recovery</button></div></div>
+      <div class="grid2">
+        <div><label class="lab" for="fPrice">Price</label><input class="field" id="fPrice" inputmode="decimal" placeholder="$0"></div>
+        <div><label class="lab" for="fPay">How buyers pay</label>
+          <select class="field" id="fPay"><option>Invoice</option><option>Buy now</option><option>Both</option></select></div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <label class="lab" for="fDesc" style="margin:0">Description</label>
+          <button class="ai" id="aiBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/></svg><span>Write it for me</span></button>
+        </div>
+        <textarea class="field" id="fDesc" placeholder="Type it, dictate it, or tap “Write it for me”."></textarea>
+      </div>
+    </div>
+    <div style="flex:1"></div>
+    <div class="cta-wrap"><button class="cta" id="postBtn">POST TO WEBSITE</button></div>
+  </section>
+
+  <!-- LISTINGS -->
+  <section class="screen" id="s-list">
+    <header class="top" style="flex-direction:column;align-items:stretch;gap:14px">
+      <div><div class="brand">FITNESS EQUIPMENT SOLUTIONS</div><h1>MY LISTINGS</h1></div>
+      <div class="chips" id="filters"></div>
+    </header>
+    <div class="pad" id="listWrap" style="gap:10px"></div>
+  </section>
+
+  <!-- REQUESTS -->
+  <section class="screen" id="s-req">
+    <header class="top"><div><div class="brand">FITNESS EQUIPMENT SOLUTIONS</div><h1>REQUESTS</h1></div>
+      <button class="icon-btn" id="reqRefresh" aria-label="Refresh requests"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg></button></header>
+    <div class="pad" id="reqWrap" style="gap:10px"></div>
+  </section>
+
+  <!-- INVOICE -->
+  <section class="screen" id="s-inv">
+    <header class="top" style="justify-content:flex-start">
+      <button class="icon-btn" data-go="req" aria-label="Back to requests"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <div style="min-width:0"><div class="brand">BUYER REQUEST</div><h1 id="invTitle" style="font-size:24px">—</h1></div>
+    </header>
+    <div class="pad" id="invWrap" style="gap:14px"></div>
+    <div style="flex:1"></div>
+    <div class="cta-wrap" id="invActions"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="screen" id="s-more">
+    <header class="top"><div><div class="brand">FITNESS EQUIPMENT SOLUTIONS</div><h1>SETTINGS</h1></div></header>
+    <div class="pad" id="moreWrap" style="gap:12px"></div>
+  </section>
+
+  <nav class="tabs hidden" id="tabs">
+    <button data-go="sell"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Sell</button>
+    <button data-go="list"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg>Listings</button>
+    <button data-go="req"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg>Requests<span class="badge hidden" id="reqBadge">0</span></button>
+    <button data-go="more"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
+  </nav>
+
+  <div class="scrim" id="scrim"></div>
+  <div class="sheet" id="sheet"><button class="grab" aria-label="Close"></button><div id="sheetBody"></div></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>
