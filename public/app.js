@@ -136,15 +136,16 @@ $('#postBtn').addEventListener('click', async () => {
       ${l.wixError ? '<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#F5B82E" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/></svg>' : '<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#7FD8A0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>'}
       <h1 style="font-size:26px">${l.wixError ? 'SAVED — WEBSITE DIDN’T UPDATE' : 'IT’S LIVE'}</h1>
       <p class="muted" style="margin:0;font-size:15px;line-height:1.5">${l.wixError ? 'It’s saved in the app. The website said: ' + esc(l.wixError) : `“${esc(title)}” is up for ${money(price)}.` + (l.wix && l.wix.pages && l.wix.pages.length ? ` Showing on: ${esc(l.wix.pages.join(', '))}.` : '')}</p>
-      <a class="cta" href="/want/${l.id}" target="_blank" rel="noopener">SEE IT</a>
+      <a class="cta" href="${siteLink(l)}" target="_blank" rel="noopener">SEE IT</a>
       <button class="cta ghost" data-close>POST ANOTHER</button></div>`);
   } catch (err) { toast('Didn’t post', err.message); }
   btn.disabled = false; btn.textContent = 'POST TO WEBSITE';
 });
 
 // ---------- listings
+const siteLink = l => (l.wix && l.wix.slug && S.status && S.status.siteUrl) ? `${S.status.siteUrl}/product-page/${encodeURIComponent(l.wix.slug)}` : `/want/${l.id}`;
 const STATUS = { live: ['LIVE', 'st-live'], pending: ['INVOICE SENT', 'st-pend'], sold: ['SOLD', 'st-sold'] };
-const thumbOf = l => l.photos && l.photos[0] ? `<img src="/photos/${l.photos[0]}" alt="" loading="lazy">` : `<svg viewBox="0 0 24 24" fill="none" stroke="#8A8A8A" stroke-width="1.4" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>`;
+const thumbOf = l => l.photos && l.photos[0] ? `<img src="/photos/${l.photos[0]}" alt="" loading="lazy">` : l.photoUrls && l.photoUrls[0] ? `<img src="${esc(l.photoUrls[0])}/v1/fill/w_200,h_200,al_c,q_80/t.jpg" onerror="this.onerror=null;this.src='${esc(l.photoUrls[0])}'" alt="" loading="lazy">` : `<svg viewBox="0 0 24 24" fill="none" stroke="#8A8A8A" stroke-width="1.4" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>`;
 async function loadListings() {
   if (!S.listings.length) $('#listWrap').innerHTML = '<div class="empty">Loading…</div>';
   try { S.listings = await api('/api/listings'); renderList(); } catch (err) { $('#listWrap').innerHTML = `<div class="empty err">${esc(err.message)}</div>`; }
@@ -181,7 +182,7 @@ function editSheet(id) {
     <div><label class="lab" for="eDesc">Description</label><textarea class="field" id="eDesc">${esc(l.desc)}</textarea></div>
     <button class="cta" data-save="${l.id}">SAVE CHANGES</button>
     <div class="grid2">
-      <a class="cta ghost" style="font-size:16px" href="/want/${l.id}" target="_blank" rel="noopener">VIEW ON SITE</a>
+      <a class="cta ghost" style="font-size:16px" href="${siteLink(l)}" target="_blank" rel="noopener">VIEW ON SITE</a>
       ${l.status === 'sold' ? `<button class="cta ghost" style="font-size:16px" data-relist="${l.id}">RELIST</button>` : `<button class="cta ghost" style="font-size:16px" data-sold="${l.id}">MARK SOLD</button>`}
     </div>
     <button class="cta ghost" style="font-size:16px;color:#FF9A8A;border-color:#4A2A26" data-remove="${l.id}">REMOVE FROM WEBSITE</button>
@@ -320,7 +321,8 @@ async function renderMore(check) {
     <div class="card" style="display:flex;flex-direction:column;gap:10px">
       <div style="font-family:var(--head);letter-spacing:.06em">WEBSITE</div>
       <div><span class="dot ${wixLine[0]}"></span>${esc(wixLine[1])}</div>${pagesLine}
-      <a class="cta ghost" style="height:44px;font-size:15px" href="${esc(s.shopUrl)}" target="_blank" rel="noopener">OPEN SHOP PAGE</a>
+      ${w.mode === 'wix' && w.ready ? `<button class="cta" id="importBtn" style="height:48px;font-size:16px">IMPORT EQUIPMENT FROM WEBSITE</button><div class="muted" style="line-height:1.5">Brings the items already on your Wix store into the app so you can edit, mark sold or remove them here. Safe to run again — it skips items already imported.</div>` : ''}
+      <a class="cta ghost" style="height:44px;font-size:15px" href="${esc(s.siteUrl || s.shopUrl)}" target="_blank" rel="noopener">OPEN WEBSITE</a>
     </div>
     <div class="card" style="display:flex;flex-direction:column;gap:10px">
       <div style="font-family:var(--head);letter-spacing:.06em">QUICKBOOKS</div>
@@ -339,6 +341,11 @@ async function renderMore(check) {
 }
 document.addEventListener('click', async e => {
   if (e.target.closest('#logoutBtn')) logout();
+  if (e.target.closest('#importBtn')) {
+    const b = $('#importBtn'); b.disabled = true; b.innerHTML = '<span class="spin"></span>IMPORTING…';
+    try { const r = await api('/api/wix/import', { method: 'POST' }); S.listings = await api('/api/listings'); toast('Imported ' + r.added + ' item' + (r.added === 1 ? '' : 's'), `Found ${r.found} on the website${r.skipped ? ', ' + r.skipped + ' already in the app' : ''}.`); go('list'); }
+    catch (err) { toast('Import didn’t work', err.message); b.disabled = false; b.textContent = 'IMPORT EQUIPMENT FROM WEBSITE'; }
+  }
   if (e.target.closest('#qbOff')) { await api('/api/qb/disconnect', { method: 'POST' }); renderMore(); }
 });
 

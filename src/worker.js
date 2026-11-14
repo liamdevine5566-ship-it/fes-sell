@@ -39,6 +39,7 @@ function cleanListing(body, existing = {}) {
     pay: ['Invoice', 'Buy now', 'Both'].includes(body.pay) ? body.pay : (existing.pay || 'Invoice'),
     desc: String(body.desc ?? existing.desc ?? '').slice(0, 4000),
     photos: Array.isArray(body.photos) ? body.photos.filter(k => /^[a-z0-9]+\.jpg$/.test(k)).slice(0, 10) : (existing.photos || []),
+    photoUrls: existing.photoUrls || [],
     status: ['live', 'pending', 'sold'].includes(body.status) ? body.status : (existing.status || 'live'),
   };
 }
@@ -131,7 +132,7 @@ export default {
         if (wixInfo.ready && url.searchParams.get('check')) {
           try { Object.assign(wixInfo, await wix.testConnection(env)); } catch (e) { wixInfo.error = e.message; }
         }
-        return json({ business: env.BUSINESS_NAME, taxRate: Number(env.SALES_TAX_RATE || 0), ai: !!env.ANTHROPIC_API_KEY, wix: wixInfo, qb: await qb.qbStatus(env), shopUrl: origin + '/shop' });
+        return json({ siteUrl: env.SITE_URL || '', business: env.BUSINESS_NAME, taxRate: Number(env.SALES_TAX_RATE || 0), ai: !!env.ANTHROPIC_API_KEY, wix: wixInfo, qb: await qb.qbStatus(env), shopUrl: origin + '/shop' });
       }
 
       // photos: one JPEG per call (the app resizes on the phone first)
@@ -224,6 +225,31 @@ export default {
           if (l) { l.status = 'sold'; await syncToWix(env, l, origin, 'update'); await D.upsertListing(l); }
           return json({ request: r, listing: l });
         }
+      }
+
+      if (p === '/api/wix/import' && M === 'POST') {
+        if (!wix.wixReady(env)) return fail('Connect Wix first.', 409);
+        const products = await wix.listProducts(env);
+        const all = await D.listings();
+        const known = new Set(all.filter(l => l.wix?.productId).map(l => l.wix.productId));
+        let added = 0, skipped = 0;
+        for (const pr of products) {
+          if (known.has(pr.productId)) { skipped++; continue; }
+          const names = pr.groupNames.join(' ');
+          const sold = /sold/i.test(pr.ribbon) || !pr.inStock;
+          all.push({
+            id: newId(), createdAt: Date.now() - added, imported: true,
+            title: String(pr.name || 'Untitled').slice(0, 80),
+            cond: /\bnew\b/i.test(pr.name + ' ' + names) && !/reman|pre.?owned|certified|refurb|used/i.test(pr.name + ' ' + names) ? 'New' : 'Certified pre-owned',
+            cat: /strength|pulley|press|rack|curl|pulldown|bench|rope|smith|cable/i.test(pr.name + ' ' + names) ? 'Strength' : /recover/i.test(names) ? 'Recovery' : 'Cardio',
+            price: pr.price || 0, pay: 'Invoice', desc: pr.desc || '', photos: [], photoUrls: pr.images.slice(0, 10),
+            status: sold ? 'sold' : /pending/i.test(pr.ribbon) ? 'pending' : 'live',
+            wix: { productId: pr.productId, version: pr.version, slug: pr.slug, imported: true, pages: pr.groupNames, originalHtml: pr.html || '', originalText: pr.desc || '' },
+          });
+          added++;
+        }
+        await D.saveListings(all.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+        return json({ found: products.length, added, skipped });
       }
 
       if (p === '/api/qb/disconnect' && M === 'POST') { await qb.disconnect(env); return json({ ok: true }); }

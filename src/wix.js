@@ -47,6 +47,7 @@ async function importPhoto(env, publicUrl, name) {
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function htmlDescription(l, wantUrl) {
+  if (l.wix?.imported && l.wix?.originalHtml && l.desc === l.wix.originalText) return l.wix.originalHtml + (l.wix.originalHtml.includes('/want/') ? '' : `<p><a href="${esc(wantUrl)}" target="_blank"><strong>I WANT THIS → send Frank a request</strong></a></p>`);
   const paras = String(l.desc || '').split(/\n{2,}/).map(p => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('');
   return `${paras}<p><strong>Condition:</strong> ${esc(l.cond)}</p><p><a href="${esc(wantUrl)}" target="_blank"><strong>I WANT THIS → send Frank a request</strong></a></p>`;
 }
@@ -82,7 +83,7 @@ export async function createProduct(env, l, { origin }) {
     };
     if (media.length) product.media = { itemsInfo: { items: media.map(url => ({ url, altText: l.title })) } };
     const j = await wix(env, 'POST', '/stores/v3/products', { product });
-    const out = { productId: j.product.id, version: v };
+    const out = { productId: j.product.id, version: v, slug: j.product.slug };
     out.pages = await placeInGroups(env, { ...l, wix: out }).catch(e => ['(not added to pages: ' + e.message.slice(0, 120) + ')']);
     return out;
   }
@@ -97,7 +98,7 @@ export async function createProduct(env, l, { origin }) {
   });
   const id = j.product.id;
   if (media.length) await wix(env, 'POST', `/stores/v1/products/${id}/media`, { media: media.map(url => ({ url })) });
-  const out = { productId: id, version: v };
+  const out = { productId: id, version: v, slug: j.product.slug };
   out.pages = await placeInGroups(env, { ...l, wix: out }).catch(e => ['(not added to pages: ' + e.message.slice(0, 120) + ')']);
   return out;
 }
@@ -181,4 +182,51 @@ export async function testConnection(env) {
   let groups = [];
   try { groups = (await listGroups(env)).map(g => g.name); } catch (e) { groups = ['(could not list: ' + e.message.slice(0, 120) + ')']; }
   return { catalogVersion: catalog, storePages: groups };
+}
+
+// ---- Import: read the products already on the Wix store.
+const strip = h => String(h || '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>\s*<p[^>]*>/gi, '\n\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\n{3,}/g, '\n\n').trim();
+
+export async function listProducts(env) {
+  const v = await catalogVersion(env);
+  const groups = await listGroups(env).catch(() => []);
+  const gname = id => (groups.find(g => g.id === id) || {}).name || '';
+  const out = [];
+  if (v === 'V3_CATALOG') {
+    let cursor = null;
+    for (let i = 0; i < 20; i++) {
+      const j = await wix(env, 'POST', '/stores/v3/products/query', { query: { cursorPaging: { limit: 100, ...(cursor ? { cursor } : {}) } }, fields: ['MEDIA_ITEMS_INFO', 'PLAIN_DESCRIPTION', 'URL'] });
+      for (const p of j.products || []) {
+        const imgs = (p.media?.itemsInfo?.items || []).map(m => m.image?.url || m.url).filter(Boolean);
+        if (!imgs.length && p.media?.main?.image?.url) imgs.push(p.media.main.image.url);
+        out.push({
+          productId: p.id, version: v, name: p.name, slug: p.slug,
+          price: Number(p.actualPriceRange?.minValue?.amount || p.variantsInfo?.variants?.[0]?.price?.actualPrice?.amount || 0),
+          desc: p.plainDescription ? strip(p.plainDescription) : strip(JSON.stringify(p.description || '')).slice(0, 0),
+          images: imgs, ribbon: p.ribbon?.name || '', visible: p.visible !== false,
+          inStock: p.inventory?.availabilityStatus ? p.inventory.availabilityStatus !== 'OUT_OF_STOCK' : true,
+          groupNames: [],
+        });
+      }
+      cursor = j.pagingMetadata?.cursors?.next;
+      if (!cursor) break;
+    }
+    return out;
+  }
+  for (let offset = 0; offset < 2000; offset += 100) {
+    const j = await wix(env, 'POST', '/stores/v1/products/query', { query: { paging: { limit: 100, offset } }, includeVariants: false });
+    for (const p of j.products || []) {
+      const imgs = (p.media?.items || []).map(m => m.image?.url).filter(Boolean);
+      if (!imgs.length && p.media?.mainMedia?.image?.url) imgs.push(p.media.mainMedia.image.url);
+      out.push({
+        productId: p.id, version: v, name: p.name, slug: p.slug,
+        price: Number(p.priceData?.price ?? p.price?.price ?? 0),
+        desc: strip(p.description), html: p.description || '', images: imgs, ribbon: p.ribbon || '', visible: p.visible !== false,
+        inStock: p.stock ? p.stock.inStock !== false : true,
+        groupNames: (p.collectionIds || []).map(gname).filter(Boolean),
+      });
+    }
+    if (!j.products || j.products.length < 100) break;
+  }
+  return out;
 }

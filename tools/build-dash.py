@@ -13,7 +13,7 @@ rep = [
  ("ctx.waitUntil(Promise.all((cur.photos || []).map(k => env.PHOTOS.delete(k))));", "ctx.waitUntil(Promise.all((cur.photos || []).map(k => env.DB.delete('photo:' + k))));"),
  ("        return env.ASSETS.fetch(req);", "        return serveAsset(p);"),
  ("export default {\n  async fetch(req, env, ctx) {",
-  "const DEFAULTS = { STORE_MODE: 'local', WIX_SITE_ID: '5bb413e8-a139-4c76-ae34-c36b2e5f6fc1', BUSINESS_NAME: 'Fitness Equipment Solutions', BUSINESS_TOWN: 'Rothesay, NB', SALES_TAX_RATE: '0.15', QB_ENV: 'production', QB_TAX_CODE_NAME: 'HST NB', QB_ITEM_NAME: 'Fitness Equipment', AI_MODEL: 'claude-sonnet-5-5' };\nexport default {\n  async fetch(req, rawEnv, ctx) {\n    const env = { ...DEFAULTS, ...rawEnv };\n    if (env.WIX_API_KEY) env.WIX_API_KEY = String(env.WIX_API_KEY).trim();"),
+  "const DEFAULTS = { STORE_MODE: 'local', WIX_SITE_ID: '5bb413e8-a139-4c76-ae34-c36b2e5f6fc1', BUSINESS_NAME: 'Fitness Equipment Solutions', BUSINESS_TOWN: 'Rothesay, NB', SALES_TAX_RATE: '0.15', QB_ENV: 'production', QB_TAX_CODE_NAME: 'HST NB', QB_ITEM_NAME: 'Fitness Equipment', AI_MODEL: 'claude-sonnet-5-5', SITE_URL: 'https://www.fitnessequipmentsolutions.ca' };\nexport default {\n  async fetch(req, rawEnv, ctx) {\n    const env = { ...DEFAULTS, ...rawEnv };\n    if (env.WIX_API_KEY) env.WIX_API_KEY = String(env.WIX_API_KEY).trim();"),
 ]
 for a, b in rep:
     assert a in w, a[:60]
