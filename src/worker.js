@@ -28,6 +28,17 @@ async function authed(req, env) {
   return !!(await env.DB.get('sess:' + token));
 }
 
+// gallery = the photos in display order; app photos are "<key>.jpg", website photos are https URLs.
+const isKey = g => /^[a-z0-9]+\.jpg$/.test(g);
+const isUrl = g => /^https:\/\/[^\s"'<>]+$/.test(g);
+export const galleryOf = l => (l.gallery && l.gallery.length) ? l.gallery : [...(l.photos || []), ...(l.photoUrls || [])];
+function galleryFrom(body, existing) {
+  if (!Array.isArray(body.gallery)) return {};
+  const g = body.gallery.filter(x => isKey(x) || isUrl(x)).slice(0, 15);
+  const changed = JSON.stringify(g) !== JSON.stringify(galleryOf(existing));
+  return { gallery: g, photos: g.filter(isKey), photoUrls: g.filter(isUrl), photosDirty: changed || !!existing.photosDirty };
+}
+
 function cleanListing(body, existing = {}) {
   const price = Number(String(body.price ?? existing.price ?? '').replace(/[^0-9.]/g, ''));
   return {
@@ -40,6 +51,7 @@ function cleanListing(body, existing = {}) {
     desc: String(body.desc ?? existing.desc ?? '').slice(0, 4000),
     photos: Array.isArray(body.photos) ? body.photos.filter(k => /^[a-z0-9]+\.jpg$/.test(k)).slice(0, 10) : (existing.photos || []),
     photoUrls: existing.photoUrls || [],
+    ...galleryFrom(body, existing),
     status: ['live', 'pending', 'sold'].includes(body.status) ? body.status : (existing.status || 'live'),
   };
 }
@@ -47,7 +59,7 @@ function cleanListing(body, existing = {}) {
 async function syncToWix(env, l, origin, action) {
   if (!wix.wixReady(env)) return l;
   try {
-    if (action === 'create') l.wix = await wix.createProduct(env, l, { origin });
+    if (action === 'create') { l.wix = await wix.createProduct(env, l, { origin }); delete l._mediaMap; l.photosDirty = false; }
     else if (action === 'update') await wix.updateProduct(env, l, { origin });
     else if (action === 'delete') await wix.deleteProduct(env, l);
     l.wixError = l.wix?.photoError ? 'On the website, but the photos didn’t copy — ' + l.wix.photoError.replace(/^Wix problem copying photos: /, '') + '. Tap Save on this item to retry.' : null;
@@ -155,7 +167,7 @@ export default {
         const l = cleanListing(await readJson(req));
         if (!l.title) return fail('Needs a title');
         if (!l.price) return fail('Needs a price');
-        l.id = newId(); l.createdAt = Date.now(); l.status = 'live';
+        l.id = newId(); l.createdAt = Date.now(); l.status = 'live'; l.gallery = [...l.photos];
         await syncToWix(env, l, origin, 'create');
         await D.upsertListing(l);
         return json(l);
@@ -166,7 +178,9 @@ export default {
         if (!cur) return fail('Not found', 404);
         if (M === 'PATCH') {
           const l = cleanListing(await readJson(req), cur);
+          l.prev = { cat: cur.cat, cond: cur.cond };
           await syncToWix(env, l, origin, cur.wix ? 'update' : 'create');
+          delete l.prev;
           await D.upsertListing(l);
           return json(l);
         }

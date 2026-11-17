@@ -150,7 +150,10 @@ $('#postBtn').addEventListener('click', async () => {
 // ---------- listings
 const siteLink = l => (l.wix && l.wix.slug && S.status && S.status.siteUrl) ? `${S.status.siteUrl}/product-page/${encodeURIComponent(l.wix.slug)}` : `/want/${l.id}`;
 const STATUS = { live: ['LIVE', 'st-live'], pending: ['INVOICE SENT', 'st-pend'], sold: ['SOLD', 'st-sold'] };
-const thumbOf = l => l.photos && l.photos[0] ? `<img src="/photos/${l.photos[0]}" alt="" loading="lazy">` : l.photoUrls && l.photoUrls[0] ? `<img src="${esc(l.photoUrls[0])}/v1/fill/w_200,h_200,al_c,q_80/t.jpg" onerror="this.onerror=null;this.src='${esc(l.photoUrls[0])}'" alt="" loading="lazy">` : `<svg viewBox="0 0 24 24" fill="none" stroke="#8A8A8A" stroke-width="1.4" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>`;
+const galleryOf = l => (l.gallery && l.gallery.length) ? l.gallery : [...(l.photos || []), ...(l.photoUrls || [])];
+const imgSrc = (g, small) => /^https:/.test(g) ? (small && /wixstatic/.test(g) ? g + '/v1/fill/w_240,h_240,al_c,q_80/t.jpg' : g) : '/photos/' + g;
+const thumbOf0 = l => { const g = galleryOf(l)[0]; return g ? `<img src="${esc(imgSrc(g, true))}" onerror="this.onerror=null;this.src='${esc(imgSrc(g))}'" alt="" loading="lazy">` : null; };
+const thumbOf = l => thumbOf0(l) || (l.photos && l.photos[0] ? `<img src="/photos/${l.photos[0]}" alt="" loading="lazy">` : l.photoUrls && l.photoUrls[0] ? `<img src="${esc(l.photoUrls[0])}/v1/fill/w_200,h_200,al_c,q_80/t.jpg" onerror="this.onerror=null;this.src='${esc(l.photoUrls[0])}'" alt="" loading="lazy">` : `<svg viewBox="0 0 24 24" fill="none" stroke="#8A8A8A" stroke-width="1.4" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>`);
 async function loadListings() {
   if (!S.listings.length) $('#listWrap').innerHTML = '<div class="empty">Loading…</div>';
   try { S.listings = await api('/api/listings'); renderList(); } catch (err) { $('#listWrap').innerHTML = `<div class="empty err">${esc(err.message)}</div>`; }
@@ -176,15 +179,32 @@ document.addEventListener('click', e => {
   const f = e.target.closest('[data-filter]'); if (f) { S.filter = f.dataset.filter; renderList(); return; }
   const ed = e.target.closest('[data-edit]'); if (ed) editSheet(ed.dataset.edit);
 });
+let EG = []; // gallery being edited: [{ g: key-or-url, busy, ai }]
+function chip(group, v, on) { return `<button class="chip ${on ? 'on' : ''}" data-egroup="${group}" data-v="${v}">${v}</button>`; }
+function renderEditPhotos() {
+  const el = $('#ePhotos'); if (!el) return;
+  el.innerHTML = EG.map((p, i) => `<div class="ethumb ${p.busy ? 'busy' : ''}">
+      <img src="${esc(p.preview || imgSrc(p.g, true))}" alt="Photo ${i + 1}" onerror="this.onerror=null;this.src='${esc(p.g ? imgSrc(p.g) : '')}'">
+      ${i === 0 ? '<span class="main-tag">MAIN</span>' : `<button class="mk-main" data-emain="${i}" aria-label="Make photo ${i + 1} the main photo">Make main</button>`}
+      <button class="x" data-erm="${i}" aria-label="Remove photo ${i + 1}">×</button>
+    </div>`).join('') + `<label class="ethumb add" for="eCam"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add photos</span></label>`;
+}
 function editSheet(id) {
   const l = S.listings.find(x => x.id === id); if (!l) return;
-  openSheet(`<div style="display:flex;flex-direction:column;gap:14px">
-    <div class="row"><div class="list-thumb" style="width:64px;height:64px">${thumbOf(l)}</div>
-      <div style="min-width:0"><div class="brand">EDIT LISTING</div><div style="font-weight:600;font-size:16px;margin-top:2px">${esc(l.title)}</div></div></div>
+  EG = galleryOf(l).map(g => ({ g }));
+  openSheet(`<div style="display:flex;flex-direction:column;gap:14px" data-editing="${l.id}">
+    <div><div class="brand">EDIT LISTING</div><div style="font-weight:600;font-size:16px;margin-top:2px">${esc(l.title)}</div></div>
     ${l.wixError ? `<div class="muted err" style="line-height:1.5">${esc(l.wixError)}</div>` : ''}
+    <div><span class="lab">Photos <span class="muted" style="font-weight:400">— first one is the main photo</span></span>
+      <div class="ephotos" id="ePhotos"></div>
+      <input id="eCam" type="file" accept="image/*" multiple class="hidden"></div>
     <div><label class="lab" for="eTitle">Title</label><input class="field" id="eTitle" value="${esc(l.title)}" maxlength="80"></div>
+    <div><span class="lab">Condition</span><div class="seg">${chip('econd', 'New', l.cond === 'New')}${chip('econd', 'Certified pre-owned', l.cond !== 'New')}</div></div>
+    <div><span class="lab">Category</span><div class="chips">${['Cardio', 'Strength', 'Recovery'].map(c => chip('ecat', c, l.cat === c)).join('')}</div></div>
     <div><label class="lab" for="ePrice">Price</label><input class="field" id="ePrice" inputmode="decimal" value="${l.price}"></div>
-    <div><label class="lab" for="eDesc">Description</label><textarea class="field" id="eDesc">${esc(l.desc)}</textarea></div>
+    <div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><label class="lab" for="eDesc" style="margin:0">Description</label>
+      <button class="ai" id="eAi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/></svg><span>Rewrite it for me</span></button></div>
+      <textarea class="field" id="eDesc" style="min-height:150px">${esc(l.desc)}</textarea></div>
     <button class="cta" data-save="${l.id}">SAVE CHANGES</button>
     <div class="grid2">
       <a class="cta ghost" style="font-size:16px" href="${siteLink(l)}" target="_blank" rel="noopener">VIEW ON SITE</a>
@@ -192,7 +212,35 @@ function editSheet(id) {
     </div>
     <button class="cta ghost" style="font-size:16px;color:#FF9A8A;border-color:#4A2A26" data-remove="${l.id}">REMOVE FROM WEBSITE</button>
   </div>`);
+  renderEditPhotos();
+  $('#eCam').addEventListener('change', async e => {
+    const files = [...e.target.files].slice(0, 15 - EG.length); e.target.value = '';
+    for (const f of files) {
+      const p = { g: null, preview: URL.createObjectURL(f), busy: true }; EG.push(p); renderEditPhotos();
+      try {
+        const img = await loadImage(f);
+        const big = await toJpeg(img, 1600, 0.82); const small = await toJpeg(img, 768, 0.7);
+        p.ai = small.canvas.toDataURL('image/jpeg', 0.7);
+        p.g = (await api('/api/photos', { method: 'POST', body: big.blob, headers: { 'content-type': 'image/jpeg' } })).key;
+      } catch (err) { EG = EG.filter(x => x !== p); toast('Photo didn’t upload', err.message); }
+      p.busy = false; renderEditPhotos();
+    }
+  });
+  $('#eAi').addEventListener('click', async () => {
+    const b = $('#eAi'); b.disabled = true; b.querySelector('span').textContent = 'Writing…';
+    try {
+      const r = await api('/api/ai/describe', { method: 'POST', json: { title: $('#eTitle').value, cond: $('[data-egroup="econd"].on')?.dataset.v, cat: $('[data-egroup="ecat"].on')?.dataset.v, notes: $('#eDesc').value, images: EG.filter(p => p.ai).slice(0, 3).map(p => p.ai) } });
+      await typeInto($('#eDesc'), r.text);
+    } catch (err) { toast('Couldn’t write it', err.message); }
+    b.disabled = false; b.querySelector('span').textContent = 'Rewrite it for me';
+  });
 }
+document.addEventListener('click', e => {
+  const c = e.target.closest('[data-egroup]');
+  if (c) { $$(`[data-egroup="${c.dataset.egroup}"]`).forEach(x => x.classList.toggle('on', x === c)); return; }
+  const rm = e.target.closest('[data-erm]'); if (rm) { e.preventDefault(); EG.splice(+rm.dataset.erm, 1); renderEditPhotos(); return; }
+  const mm = e.target.closest('[data-emain]'); if (mm) { e.preventDefault(); const [p] = EG.splice(+mm.dataset.emain, 1); EG.unshift(p); renderEditPhotos(); }
+});
 document.addEventListener('click', async e => {
   const t = e.target.closest('[data-save],[data-sold],[data-relist],[data-remove],[data-confirm-remove],[data-close]'); if (!t) return;
   if (t.dataset.close !== undefined) { closeSheet(); return; }
@@ -211,7 +259,8 @@ document.addEventListener('click', async e => {
       await api('/api/listings/' + id, { method: 'DELETE' });
       S.listings = S.listings.filter(x => x.id !== id); toast('Removed', 'It’s off the website.');
     } else {
-      const body = t.dataset.save ? { title: $('#eTitle').value, price: $('#ePrice').value, desc: $('#eDesc').value } : { status: t.dataset.sold ? 'sold' : 'live' };
+      if (t.dataset.save && EG.some(p => p.busy)) { toast('Hang on', 'Photos are still uploading.'); t.disabled = false; t.textContent = label; return; }
+      const body = t.dataset.save ? { title: $('#eTitle').value, price: $('#ePrice').value, desc: $('#eDesc').value, cond: $('[data-egroup="econd"].on')?.dataset.v, cat: $('[data-egroup="ecat"].on')?.dataset.v, gallery: EG.map(p => p.g).filter(Boolean) } : { status: t.dataset.sold ? 'sold' : 'live' };
       const n = await api('/api/listings/' + id, { method: 'PATCH', json: body });
       Object.assign(l, n);
       toast(n.wixError ? 'Saved — website didn’t update' : t.dataset.save ? 'Saved' : t.dataset.sold ? 'Marked sold' : 'Back on the website', n.wixError || l.title);

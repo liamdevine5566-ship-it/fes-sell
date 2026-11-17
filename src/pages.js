@@ -35,7 +35,7 @@ button[disabled]{background:#ccc;border-color:#999;color:#555}
 export function wantPage(env, l) {
   if (!l) return shell(env, 'Not found', `<h1>That listing is gone</h1><p>It may have sold. <a href="/shop">See what's available</a>.</p>`);
   const sold = l.status === 'sold', pend = l.status === 'pending';
-  const imgs = [...(l.photos || []).map(k => '/photos/' + k), ...(l.photoUrls || [])].map(u => `<img src="${esc(u)}" alt="${esc(l.title)}">`).join('');
+  const imgs = ((l.gallery && l.gallery.length) ? l.gallery : [...(l.photos || []), ...(l.photoUrls || [])]).map(g => /^https:/.test(g) ? g : '/photos/' + g).map(u => `<img src="${esc(u)}" alt="${esc(l.title)}">`).join('');
   return shell(env, l.title, `
     <a href="javascript:history.length>1?history.back():location.assign('/shop')" style="display:inline-flex;align-items:center;gap:4px;color:#111;text-decoration:none;font-size:15px;padding:6px 0 12px">← Back</a>
     ${imgs ? `<div class="gallery">${imgs}</div>` : ''}
@@ -70,6 +70,6 @@ export function shopPage(env, listings) {
   const live = listings.filter(l => l.status !== 'sold');
   return shell(env, 'Shop', `<h1>SHOP EQUIPMENT</h1>
     <div class="grid">${live.map(l => `<a class="card" href="/want/${esc(l.id)}">
-      ${l.photos?.[0] ? `<img src="/photos/${esc(l.photos[0])}" alt="">` : l.photoUrls?.[0] ? `<img src="${esc(l.photoUrls[0])}" alt="">` : '<img alt="">'}
+      ${l.gallery?.[0] ? `<img src="${/^https:/.test(l.gallery[0]) ? esc(l.gallery[0]) : '/photos/' + esc(l.gallery[0])}" alt="">` : l.photos?.[0] ? `<img src="/photos/${esc(l.photos[0])}" alt="">` : l.photoUrls?.[0] ? `<img src="${esc(l.photoUrls[0])}" alt="">` : '<img alt="">'}
       <div><div class="t">${esc(l.title)}</div><div class="p">${l.status === 'pending' ? 'Sale pending' : money(l.price)}</div></div></a>`).join('') || '<p>Nothing listed right now.</p>'}</div>`);
 }

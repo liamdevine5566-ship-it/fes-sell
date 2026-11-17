@@ -74,9 +74,12 @@ export async function createProduct(env, l, { origin }) {
   const media = [];
   let photoError = null;
   try {
-    for (const [i, key] of (l.photos || []).slice(0, v === 'V3_CATALOG' ? 3 : 10).entries()) {
-      media.push(await importPhoto(env, `${origin}/photos/${key}`, `${l.id}-${i + 1}.jpg`));
+    const map = {};
+    for (const [i, key] of (l.photos || []).slice(0, 15).entries()) {
+      map[key] = await importPhoto(env, `${origin}/photos/${key}`, `${l.id}-${i + 1}.jpg`);
+      media.push(map[key]);
     }
+    l._mediaMap = map;
   } catch (e) { photoError = e.message; media.length = 0; }
   if (v === 'V3_CATALOG') {
     const product = {
@@ -89,7 +92,7 @@ export async function createProduct(env, l, { origin }) {
     };
     if (media.length) product.media = { itemsInfo: { items: media.map(url => ({ url, altText: l.title })) } };
     const j = await wix(env, 'POST', '/stores/v3/products', { product });
-    const out = { productId: j.product.id, version: v, slug: j.product.slug, mediaDone: !photoError, photoError };
+    const out = { productId: j.product.id, version: v, slug: j.product.slug, mediaDone: !photoError, photoError, mediaMap: l._mediaMap || {} };
     out.pages = await placeInGroups(env, { ...l, wix: out }).catch(e => ['(not added to pages: ' + e.message.slice(0, 120) + ')']);
     return out;
   }
@@ -104,29 +107,54 @@ export async function createProduct(env, l, { origin }) {
   });
   const id = j.product.id;
   if (media.length) await wix(env, 'POST', `/stores/v1/products/${id}/media`, { media: media.map(url => ({ url })) });
-  const out = { productId: id, version: v, slug: j.product.slug, mediaDone: !photoError, photoError };
+  const out = { productId: id, version: v, slug: j.product.slug, mediaDone: !photoError, photoError, mediaMap: l._mediaMap || {} };
   out.pages = await placeInGroups(env, { ...l, wix: out }).catch(e => ['(not added to pages: ' + e.message.slice(0, 120) + ')']);
   return out;
 }
 
-async function retryPhotos(env, l, origin) {
-  if (l.wix.mediaDone !== false || !(l.photos || []).length) return;
-  const media = [];
-  for (const [i, key] of l.photos.slice(0, l.wix.version === 'V3_CATALOG' ? 3 : 10).entries()) {
-    media.push(await importPhoto(env, `${origin}/photos/${key}`, `${l.id}-${i + 1}.jpg`));
+const galleryOf = l => (l.gallery && l.gallery.length) ? l.gallery : [...(l.photos || []), ...(l.photoUrls || [])];
+
+// Make the Wix product's photos match the app: same photos, same order (first = main photo).
+async function syncPhotos(env, l, origin) {
+  const needs = l.photosDirty || l.wix.mediaDone === false;
+  if (!needs) return;
+  const map = l.wix.mediaMap || {};
+  const urls = [];
+  for (const [i, g] of galleryOf(l).slice(0, l.wix.version === 'V3_CATALOG' ? 15 : 15).entries()) {
+    if (/^https:/.test(g)) { urls.push(g); continue; }
+    if (!map[g]) map[g] = await importPhoto(env, `${origin}/photos/${g}`, `${l.id}-${i + 1}.jpg`);
+    urls.push(map[g]);
   }
+  l.wix.mediaMap = map;
   if (l.wix.version === 'V3_CATALOG') {
     const cur = await wix(env, 'GET', `/stores/v3/products/${l.wix.productId}`);
-    await wix(env, 'PATCH', `/stores/v3/products/${l.wix.productId}`, { product: { id: l.wix.productId, revision: cur.product.revision, media: { itemsInfo: { items: media.map(url => ({ url, altText: l.title })) } } } });
+    await wix(env, 'PATCH', `/stores/v3/products/${l.wix.productId}`, { product: { id: l.wix.productId, revision: cur.product.revision, media: { itemsInfo: { items: urls.map(url => ({ url, altText: l.title })) } } } });
   } else {
-    await wix(env, 'POST', `/stores/v1/products/${l.wix.productId}/media`, { media: media.map(url => ({ url })) });
+    await wix(env, 'POST', `/stores/v1/products/${l.wix.productId}/media/delete`, { mediaIds: [] });
+    if (urls.length) await wix(env, 'POST', `/stores/v1/products/${l.wix.productId}/media`, { media: urls.map(url => ({ url })) });
   }
-  l.wix.mediaDone = true; l.wix.photoError = null;
+  l.wix.mediaDone = true; l.wix.photoError = null; l.photosDirty = false;
+}
+
+// When category or condition changes, take it off the old store pages.
+async function leaveOldGroups(env, l) {
+  if (!l.prev || (l.prev.cat === l.cat && l.prev.cond === l.cond)) return;
+  const groups = await listGroups(env);
+  const now = new Set(groupsFor(l, groups).map(g => g.id));
+  const old = groupsFor({ ...l, ...l.prev }, groups).filter(g => !now.has(g.id));
+  for (const g of old) {
+    if (l.wix.version === 'V3_CATALOG') {
+      await wix(env, 'POST', `/categories/v1/bulk/categories/${g.id}/remove-items`, { items: [{ catalogItemId: l.wix.productId, appId: STORES_APP }], treeReference: TREE });
+    } else {
+      await wix(env, 'POST', `/stores/v1/collections/${g.id}/productIds/delete`, { productIds: [l.wix.productId] });
+    }
+  }
 }
 
 export async function updateProduct(env, l, { origin }) {
   if (!l.wix?.productId) return;
-  try { await retryPhotos(env, l, origin); } catch (e) { l.wix.photoError = e.message; }
+  try { await syncPhotos(env, l, origin); } catch (e) { l.wix.photoError = e.message; l.wix.mediaDone = false; }
+  try { await leaveOldGroups(env, l); } catch (e) { console.log('leave groups', e.message); }
   l.wix.pages = await placeInGroups(env, l).catch(e => ['(not added to pages: ' + e.message.slice(0, 120) + ')']);
   const id = l.wix.productId;
   const wantUrl = `${origin}/want/${l.id}`;
